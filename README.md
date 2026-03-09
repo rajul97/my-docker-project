@@ -1,7 +1,7 @@
 <p align="left">
   <img src="https://www.docker.com/wp-content/uploads/2022/03/horizontal-logo-monochromatic-white.png" width="180" alt="Docker Logo" />
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/UWTSD_logo.png/220px-UWTSD_logo.png" width="140" alt="UWTSD Logo" />
+  <img src="[https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/UWTSD_logo.png/220px-UWTSD_logo.png](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQMHPxePw6smPTn53H6tgKFCEdmqIKsphDf7Q&s)" width="140" alt="UWTSD Logo" />
 </p>
 
 ---
@@ -126,4 +126,5 @@ GitHub repository: https://github.com/rajul97/my-docker-project
 [3] Pahl, C. (2015). Containerisation and the PaaS Cloud. IEEE Cloud Computing, 2(3), pp.24-31.
 
 [4] Turnbull, J. (2014). The Docker Book: Containerization is the New Virtualization. James Turnbull.
+
 
