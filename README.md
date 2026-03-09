@@ -1,10 +1,6 @@
-<p align="left">
-  <img src="https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png" width="80" alt="Docker" />
-  &nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/rajul97/my-docker-project/main/assets/uwtsd.png" width="130" alt="UWTSD" />
-</p>
----
-
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![NGINX](https://img.shields.io/badge/NGINX-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
 
 # Docker Containerisation — Cloud Engineering Assignment
 
@@ -125,6 +121,7 @@ GitHub repository: https://github.com/rajul97/my-docker-project
 [3] Pahl, C. (2015). Containerisation and the PaaS Cloud. IEEE Cloud Computing, 2(3), pp.24-31.
 
 [4] Turnbull, J. (2014). The Docker Book: Containerization is the New Virtualization. James Turnbull.
+
 
 
 
