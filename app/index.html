@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rajul Gupta - Docker Dashboard</title>
+
+  <!-- using google fonts, space mono looks like terminal font -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Orbitron:wght@600;900&display=swap" rel="stylesheet"/>
+
+  <style>
+
+    /* reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #030d03;
+      color: #00ff41;
+      font-family: 'Space Mono', monospace;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    #matrixCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+      opacity: 0.13;
+      pointer-events: none;
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.12) 3px,
+        rgba(0,0,0,0.12) 4px
+      );
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 998;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+    }
+
+    #cur {
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      background: #00ff41;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 8px #00ff41, 0 0 16px rgba(0,255,65,0.5);
+    }
+    #cur-ring {
+      position: fixed;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(0,255,65,0.5);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: all 0.1s ease;
+    }
+
+    /* boot overlay */
+    #bootScreen {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 99999;
+      padding: 50px 60px;
+      font-size: 0.8rem;
+      line-height: 1.9;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: opacity 1s ease;
+    }
+    #bootScreen.fadeout {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .bl { opacity: 0; color: #00ff41; }
+    .bl.show { opacity: 1; }
+    .bl .ok { color: #28c840; margin-left: 20px; }
+    .blinkcursor {
+      display: inline-block;
+      width: 9px;
+      height: 15px;
+      background: #00ff41;
+      vertical-align: middle;
+      animation: blink 0.7s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      background: rgba(3,13,3,0.94);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(0,255,65,0.15);
+      padding: 10px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 4px;
+      color: #00ff41;
+      text-shadow: 0 0 12px rgba(0,255,65,0.6);
+    }
+    .nav-mid {
+      font-size: 0.6rem;
+      color: rgba(0,255,65,0.4);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 0.62rem;
+    }
+    .engine-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #28c840;
+    }
+    .status-led {
+      width: 7px;
+      height: 7px;
+      background: #28c840;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #28c840;
+      animation: ledpulse 2s ease-in-out infinite;
+    }
+    @keyframes ledpulse {
+      0%, 100% { box-shadow: 0 0 4px #28c840; }
+      50%       { box-shadow: 0 0 12px #28c840, 0 0 20px rgba(40,200,64,0.4); }
+    }
+    #clockDisplay {
+      color: #00ffff;
+      letter-spacing: 2px;
+      font-size: 0.62rem;
+    }
+
+    .hero {
+      position: relative;
+      z-index: 10;
+      padding: 56px 60px 44px;
+      display: grid;
+      grid-template-columns: 1fr 200px;
+      gap: 40px;
+      border-bottom: 1px solid rgba(0,255,65,0.1);
+    }
+    .hero-subtitle {
+      font-size: 0.65rem;
+      letter-spacing: 6px;
+      color: rgba(0,255,65,0.45);
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    .hero-subtitle::before { content: '> '; color: #00ffff; }
+
+    .hero-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2.2rem, 5vw, 4.2rem);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 3px;
+      line-height: 1.1;
+      text-shadow: 0 0 30px rgba(255,255,255,0.2);
+      margin-bottom: 6px;
+    }
+    .hero-module {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(0.9rem, 2vw, 1.5rem);
+      font-weight: 600;
+      color: #00ff41;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(0,255,65,0.5);
+      margin-bottom: 28px;
+    }
+    .info-grid { display: flex; flex-direction: column; gap: 7px; }
+    .info-row { font-size: 0.7rem; display: flex; gap: 0; }
+    .info-row .lbl { color: rgba(0,255,65,0.35); width: 110px; flex-shrink: 0; }
+    .info-row .val { color: #00ff41; }
+    .info-row .val.w { color: #fff; }
+    .info-row .val.c { color: #00ffff; text-shadow: 0 0 6px rgba(0,255,255,0.4); }
+    .info-row .val.y { color: #ffe000; }
+
+    .whale-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 10px;
+      gap: 10px;
+    }
+    .whale-frame {
+      width: 150px;
+      height: 150px;
+      border: 1px solid rgba(0,255,65,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      background: rgba(0,255,65,0.02);
+    }
+    .whale-frame::before {
+      content: '';
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      border: 1px solid transparent;
+      border-top-color: rgba(0,255,65,0.2);
+      border-right-color: rgba(0,255,255,0.15);
+      border-radius: 50%;
+      animation: spinRing 5s linear infinite;
+    }
+    @keyframes spinRing { to { transform: rotate(360deg); } }
+    .whale-emoji {
+      font-size: 72px;
+      position: relative;
+      z-index: 2;
+      animation: whaleBob 2.8s ease-in-out infinite;
+      filter: drop-shadow(0 0 14px rgba(0,255,65,0.5));
+    }
+    @keyframes whaleBob {
+      0%, 100% { transform: translateY(0px) rotate(-4deg); }
+      50%       { transform: translateY(-10px) rotate(4deg); }
+    }
+    .whale-label {
+      font-size: 0.55rem;
+      letter-spacing: 4px;
+      color: rgba(0,255,65,0.3);
+      text-transform: uppercase;
+    }
+    .mini-containers { display: flex; gap: 6px; margin-top: 2px; }
+    .mc {
+      width: 26px;
+      height: 16px;
+      border: 1px solid rgba(0,255,65,0.25);
+      background: rgba(0,255,65,0.04);
+      animation: mcbob 2s ease-in-out infinite;
+    }
+    .mc:nth-child(2) { animation-delay: 0.25s; }
+    .mc:nth-child(3) { animation-delay: 0.5s; }
+    @keyframes mcbob {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-3px); }
+    }
+
+    .stats-strip {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      border-bottom: 1px solid rgba(0,255,65,0.1);
+    }
+    .stat-cell {
+      padding: 22px 28px;
+      border-right: 1px solid rgba(0,255,65,0.07);
+      transition: background 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-cell:hover { background: rgba(0,255,65,0.04); }
+    .stat-cell::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, #00ff41, #00ffff);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.35s ease;
+    }
+    .stat-cell:hover::after { transform: scaleX(1); }
+    .sc-label {
+      font-size: 0.57rem;
+      letter-spacing: 2px;
+      color: rgba(0,255,65,0.3);
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+    .sc-val {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: #00ff41;
+      text-shadow: 0 0 14px rgba(0,255,65,0.5);
+      line-height: 1;
+    }
+    .sc-val.cyan  { color: #00ffff; text-shadow: 0 0 14px rgba(0,255,255,0.4); }
+    .sc-val.white { color: #fff; font-size: 0.9rem; letter-spacing: 1px; }
+    .sc-sub { font-size: 0.57rem; color: rgba(0,255,65,0.25); margin-top: 5px; }
+
+    .panels {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: rgba(0,255,65,0.05);
+    }
+    .panel {
+      background: #030d03;
+      padding: 34px 38px;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.25s;
+    }
+    .panel:hover { background: #040f04; }
+    .panel.full { grid-column: span 2; }
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 12px; left: 12px;
+      width: 14px; height: 14px;
+      border-top: 1px solid rgba(0,255,65,0.25);
+      border-left: 1px solid rgba(0,255,65,0.25);
+    }
+    .panel::after {
+      content: '';
+      position: absolute;
+      bottom: 12px; right: 12px;
+      width: 14px; height: 14px;
+      border-bottom: 1px solid rgba(0,255,65,0.25);
+      border-right: 1px solid rgba(0,255,65,0.25);
+    }
+    .ptag {
+      font-size: 0.58rem;
+      letter-spacing: 3px;
+      color: rgba(0,255,65,0.3);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .ptag::before { content: '// '; color: #00ffff; }
+    .ptitle {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: #fff;
+      margin-bottom: 12px;
+      text-shadow: 0 0 15px rgba(255,255,255,0.15);
+    }
+    .panel > p {
+      font-size: 0.72rem;
+      color: rgba(0,255,65,0.45);
+      line-height: 1.9;
+      margin-bottom: 18px;
+    }
+
+    .terminal {
+      background: #000;
+      border: 1px solid rgba(0,255,65,0.12);
+      margin-top: 14px;
+      font-size: 0.7rem;
+    }
+    .term-header {
+      background: #0a0a0a;
+      border-bottom: 1px solid rgba(0,255,65,0.08);
+      padding: 7px 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+    .term-name { font-size: 0.6rem; color: rgba(0,255,65,0.25); margin-left: 6px; letter-spacing: 1px; }
+    .term-body { padding: 16px 18px; line-height: 2; }
+
+    .cmd { display: block; color: #00ff41; }
+    .cmd::before { content: 'rajul@docker:~$ '; color: rgba(0,255,65,0.3); }
+    .out { display: block; padding-left: 12px; color: rgba(0,255,65,0.38); }
+    .out.ok   { color: #28c840; }
+    .out.ok::before { content: '✓ '; }
+    .out.info { color: #00ffff; }
+    .out.info::before { content: '» '; }
+    .kw { color: #00ffff; }
+    .sp { display: block; height: 4px; }
+
+    .container-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .c-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 11px 15px;
+      border: 1px solid rgba(0,255,65,0.1);
+      position: relative;
+      transition: all 0.25s;
+    }
+    .c-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: #00ff41;
+      box-shadow: 0 0 6px #00ff41;
+    }
+    .c-item:hover { background: rgba(0,255,65,0.04); border-color: rgba(0,255,65,0.28); }
+    .c-icon { font-size: 18px; }
+    .c-info { flex: 1; }
+    .c-name { font-size: 0.75rem; color: #fff; }
+    .c-detail { font-size: 0.62rem; color: rgba(0,255,65,0.3); margin-top: 2px; }
+    .badge { font-size: 0.57rem; padding: 3px 9px; letter-spacing: 1px; text-transform: uppercase; }
+    .badge.running { color: #28c840; border: 1px solid rgba(40,200,64,0.28); background: rgba(40,200,64,0.05); }
+    .badge.volume  { color: #00ffff; border: 1px solid rgba(0,255,255,0.2); background: rgba(0,255,255,0.04); }
+    .badge.net     { color: #ffe000; border: 1px solid rgba(255,224,0,0.2); background: rgba(255,224,0,0.04); }
+
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      row-gap: 16px;
+      margin-top: 24px;
+    }
+    .a-node {
+      text-align: center;
+      padding: 16px 18px;
+      border: 1px solid rgba(0,255,65,0.14);
+      min-width: 100px;
+      background: rgba(0,255,65,0.02);
+      transition: all 0.25s;
+    }
+    .a-node:hover { border-color: rgba(0,255,65,0.5); background: rgba(0,255,65,0.07); box-shadow: 0 0 16px rgba(0,255,65,0.12); }
+    .a-node .ni { font-size: 22px; margin-bottom: 5px; }
+    .a-node .nt { font-size: 0.52rem; color: rgba(0,255,65,0.3); letter-spacing: 2px; text-transform: uppercase; }
+    .a-node .nn { font-size: 0.68rem; color: #fff; margin-top: 3px; }
+    .a-arrow { display: flex; flex-direction: column; align-items: center; padding: 0 5px; }
+    .a-line { width: 36px; height: 1px; background: linear-gradient(90deg, #00ff41, #00ffff); position: relative; }
+    .a-line::after { content: '▶'; position: absolute; right: -7px; top: -6px; font-size: 8px; color: #00ffff; }
+    .a-lbl { font-size: 0.5rem; color: rgba(0,255,65,0.22); margin-top: 4px; }
+
+    .vol-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .vol-item { padding: 14px; border: 1px solid rgba(0,255,65,0.1); transition: all 0.25s; }
+    .vol-item:hover { border-color: rgba(0,255,65,0.35); background: rgba(0,255,65,0.04); }
+    .vol-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .vol-icon { font-size: 16px; }
+    .vol-name { font-size: 0.7rem; color: #00ff41; }
+    .vol-meta { font-size: 0.62rem; color: rgba(0,255,65,0.3); line-height: 1.8; }
+
+    .hub-stats { display: flex; gap: 30px; margin: 18px 0; }
+    .hs-num { font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 18px rgba(0,255,255,0.5); line-height: 1; }
+    .hs-lbl { font-size: 0.57rem; color: rgba(0,255,65,0.3); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+    .img-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .itag { font-size: 0.63rem; padding: 4px 11px; border: 1px solid rgba(0,255,65,0.18); color: #00ff41; letter-spacing: 1px; transition: all 0.25s; }
+    .itag:hover { border-color: #00ff41; background: rgba(0,255,65,0.08); }
+
+    footer {
+      position: relative;
+      z-index: 10;
+      border-top: 1px solid rgba(0,255,65,0.1);
+      padding: 28px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left { font-size: 0.65rem; color: rgba(0,255,65,0.3); line-height: 2; }
+    .footer-left span { color: #00ff41; }
+    .footer-right { display: flex; gap: 12px; }
+    .fbadge { font-size: 0.58rem; padding: 5px 12px; border: 1px solid rgba(0,255,65,0.15); color: rgba(0,255,65,0.35); letter-spacing: 1px; }
+
+    @media (max-width: 800px) {
+      .hero, .panels { grid-template-columns: 1fr; }
+      .panel.full { grid-column: span 1; }
+      .hero { padding: 30px 24px; }
+      .stats-strip { grid-template-columns: repeat(2, 1fr); }
+      .whale-wrap { display: none; }
+      footer { flex-direction: column; gap: 16px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="bootScreen">
+  <div class="bl" id="b0">UWTSD DOCKER ENGINE v29.2.1 initialising...</div>
+  <div class="bl" id="b1">Loading kernel modules...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b2">Mounting container filesystem...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b3">Starting NGINX:latest...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b4">Attaching volume: my-data-volume...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b5">Connecting to network: my-network...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b6">Authenticating DockerHub: rajul971...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b7">Syncing GitHub: rajul97...<span class="ok">[ OK ]</span></div>
+  <div class="bl" id="b8">&nbsp;</div>
+  <div class="bl" id="b9" style="color:#fff;font-size:1rem;letter-spacing:4px;">ACCESS GRANTED &nbsp;<span class="blinkcursor"></span></div>
+</div>
+
+<canvas id="matrixCanvas"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div id="cur"></div>
+<div id="cur-ring"></div>
+
+<nav>
+  <div class="nav-logo">DockerOps // ACCA7027</div>
+  <div class="nav-mid">Cloud Engineering Principles and Practice</div>
+  <div class="nav-right">
+    <div class="engine-status">
+      <div class="status-led"></div>
+      Docker Engine Running
+    </div>
+    <div id="clockDisplay">--:--:--</div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-left">
+    <div class="hero-subtitle">MSc Computing Portfolio // Student Dashboard</div>
+    <div class="hero-name">Rajul Gupta</div>
+    <div class="hero-module">Docker Engineering</div>
+    <div class="info-grid">
+      <div class="info-row"><span class="lbl">Student ID</span><span class="val w">2523934</span></div>
+      <div class="info-row"><span class="lbl">Email</span><span class="val c">2523934@student.uwtsd.ac.uk</span></div>
+      <div class="info-row"><span class="lbl">Module</span><span class="val">ACCA7027</span></div>
+      <div class="info-row"><span class="lbl">Lecturer</span><span class="val w">Renuga Jayakumar</span></div>
+      <div class="info-row"><span class="lbl">Verifier</span><span class="val w">Nathan Morgan</span></div>
+      <div class="info-row"><span class="lbl">GitHub</span><span class="val c">github.com/rajul97</span></div>
+      <div class="info-row"><span class="lbl">DockerHub</span><span class="val c">hub.docker.com/u/rajul971</span></div>
+      <div class="info-row"><span class="lbl">Host IP</span><span class="val y" id="hostIP">detecting...</span></div>
+      <div class="info-row"><span class="lbl">Container</span><span class="val">localhost:8080 → 0.0.0.0:80</span></div>
+    </div>
+  </div>
+  <div class="whale-wrap">
+    <div class="whale-frame">
+      <div class="whale-emoji">🐳</div>
+    </div>
+    <div class="whale-label">Docker Engine</div>
+    <div class="mini-containers">
+      <div class="mc"></div>
+      <div class="mc"></div>
+      <div class="mc"></div>
+    </div>
+  </div>
+</section>
+
+<div class="stats-strip">
+  <div class="stat-cell">
+    <div class="sc-label">Containers Active</div>
+    <div class="sc-val" id="cnt1">0</div>
+    <div class="sc-sub">running instances</div>
+  </div>
+  <div class="stat-cell">
+    <div class="sc-label">Images Built</div>
+    <div class="sc-val" id="cnt2">0</div>
+    <div class="sc-sub">local registry</div>
+  </div>
+  <div class="stat-cell">
+    <div class="sc-label">Volumes</div>
+    <div class="sc-val cyan" id="cnt3">0</div>
+    <div class="sc-sub">persistent storage</div>
+  </div>
+  <div class="stat-cell">
+    <div class="sc-label">Port Mapping</div>
+    <div class="sc-val white">8080:80</div>
+    <div class="sc-sub">host → container</div>
+  </div>
+  <div class="stat-cell">
+    <div class="sc-label">Base Image</div>
+    <div class="sc-val white">nginx:latest</div>
+    <div class="sc-sub">~25MB compressed</div>
+  </div>
+</div>
+
+<div class="panels">
+
+  <div class="panel">
+    <div class="ptag">Phase 01 — Image Build</div>
+    <div class="ptitle">Dockerfile</div>
+    <p>The Dockerfile is the blueprint for our image. It starts from the official NGINX base image, copies our HTML files into the web root, exposes port 80, and starts the server. Every instruction creates a new layer in the image.</p>
+    <div class="terminal">
+      <div class="term-header">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <span class="term-name">Dockerfile</span>
+      </div>
+      <div class="term-body">
+        <span class="out info"># pull official nginx base image</span>
+        <span class="out"><span class="kw">FROM</span> nginx:latest</span>
+        <span class="sp"></span>
+        <span class="out info"># who built this</span>
+        <span class="out"><span class="kw">LABEL</span> maintainer="2523934@student.uwtsd.ac.uk"</span>
+        <span class="out"><span class="kw">LABEL</span> version="1.0"</span>
+        <span class="sp"></span>
+        <span class="out info"># clear default page, copy our HTML in</span>
+        <span class="out"><span class="kw">RUN</span> rm -rf /usr/share/nginx/html/*</span>
+        <span class="out"><span class="kw">COPY</span> app/ /usr/share/nginx/html/</span>
+        <span class="sp"></span>
+        <span class="out info"># expose http port</span>
+        <span class="out"><span class="kw">EXPOSE</span> 80</span>
+        <span class="sp"></span>
+        <span class="out info"># start nginx in foreground</span>
+        <span class="out"><span class="kw">CMD</span> ["nginx", "-g", "daemon off;"]</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ptag">Phase 02 — Running Containers</div>
+    <div class="ptitle">Build &amp; Run</div>
+    <p>After writing the Dockerfile we build the image using docker build which reads every instruction and creates a layered image. Then docker run starts a container from that image and maps port 8080 on the laptop to port 80 inside the container.</p>
+    <div class="terminal">
+      <div class="term-header">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <span class="term-name">PowerShell — build and run</span>
+      </div>
+      <div class="term-body">
+        <span class="cmd">docker build -t my-web-app:v1 .</span>
+        <span class="out ok">Successfully built a7f3c12d9e</span>
+        <span class="out ok">Successfully tagged my-web-app:v1</span>
+        <span class="sp"></span>
+        <span class="cmd">docker run -d -p 8080:80 --name my-website my-web-app:v1</span>
+        <span class="out ok">b9e2a4f1c8d3e7f2...</span>
+        <span class="sp"></span>
+        <span class="cmd">docker ps</span>
+        <span class="out info">CONTAINER ID &nbsp; IMAGE &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; PORTS</span>
+        <span class="out">b9e2a4f1 &nbsp;&nbsp;&nbsp;&nbsp; my-web-app:v1 &nbsp; 0.0.0.0:8080->80/tcp</span>
+      </div>
+    </div>
+    <div class="container-list">
+      <div class="c-item">
+        <div class="c-icon">🌐</div>
+        <div class="c-info">
+          <div class="c-name">my-website</div>
+          <div class="c-detail">nginx:latest &nbsp;·&nbsp; 0.0.0.0:8080→80/tcp</div>
+        </div>
+        <div class="badge running">RUNNING</div>
+      </div>
+      <div class="c-item">
+        <div class="c-icon">📦</div>
+        <div class="c-info">
+          <div class="c-name">my-website-volume</div>
+          <div class="c-detail">nginx:latest &nbsp;·&nbsp; 0.0.0.0:8081→80/tcp</div>
+        </div>
+        <div class="badge running">RUNNING</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel full">
+    <div class="ptag">System Overview</div>
+    <div class="ptitle">Container Deployment Pipeline</div>
+    <p>This shows the full flow from writing the Dockerfile all the way to the image being available on DockerHub for anyone to pull and run anywhere in the cloud.</p>
+    <div class="arch-flow">
+      <div class="a-node"><div class="ni">📝</div><div class="nt">Source</div><div class="nn">Dockerfile + HTML</div></div>
+      <div class="a-arrow"><div class="a-line"></div><div class="a-lbl">docker build</div></div>
+      <div class="a-node"><div class="ni">🖼️</div><div class="nt">Image</div><div class="nn">my-web-app:v1</div></div>
+      <div class="a-arrow"><div class="a-line"></div><div class="a-lbl">docker run</div></div>
+      <div class="a-node"><div class="ni">📦</div><div class="nt">Container</div><div class="nn">my-website</div></div>
+      <div class="a-arrow"><div class="a-line"></div><div class="a-lbl">port 8080:80</div></div>
+      <div class="a-node"><div class="ni">🌐</div><div class="nt">Browser</div><div class="nn">localhost:8080</div></div>
+      <div class="a-arrow"><div class="a-line"></div><div class="a-lbl">docker push</div></div>
+      <div class="a-node" style="border-color:rgba(0,255,255,0.3)"><div class="ni">☁️</div><div class="nt">Registry</div><div class="nn">rajul971/my-web-app</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ptag">Phase 03 — Persistent Storage</div>
+    <div class="ptitle">Docker Volumes</div>
+    <p>By default when a container is deleted all data inside it is gone. Volumes fix this by storing data outside the container on the host machine. Essential for databases or anything that needs to survive container restarts.</p>
+    <div class="terminal">
+      <div class="term-header">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <span class="term-name">PowerShell — volumes</span>
+      </div>
+      <div class="term-body">
+        <span class="cmd">docker volume create my-data-volume</span>
+        <span class="out ok">my-data-volume</span>
+        <span class="sp"></span>
+        <span class="cmd">docker volume ls</span>
+        <span class="out info">DRIVER &nbsp;&nbsp; VOLUME NAME</span>
+        <span class="out">local &nbsp;&nbsp;&nbsp; my-data-volume</span>
+        <span class="sp"></span>
+        <span class="cmd">docker volume inspect my-data-volume</span>
+        <span class="out ok">Mountpoint: /var/lib/docker/volumes/my-data-volume/_data</span>
+      </div>
+    </div>
+    <div class="vol-grid">
+      <div class="vol-item">
+        <div class="vol-head"><div class="vol-icon">💾</div><div class="vol-name">my-data-volume</div></div>
+        <div class="vol-meta">Driver: local<br>Scope: local<br>Status: Active</div>
+      </div>
+      <div class="vol-item">
+        <div class="vol-head"><div class="vol-icon">📊</div><div class="vol-name">nginx-logs</div></div>
+        <div class="vol-meta">Driver: local<br>Scope: local<br>Status: Mounted</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ptag">Phase 04 — Container Network</div>
+    <div class="ptitle">Docker Networking</div>
+    <p>Docker networks let containers talk to each other using names as hostnames. Without a custom bridge network containers cannot reach each other by name — only by IP address which changes on every restart.</p>
+    <div class="terminal">
+      <div class="term-header">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <span class="term-name">PowerShell — networks</span>
+      </div>
+      <div class="term-body">
+        <span class="cmd">docker network create my-network</span>
+        <span class="out ok">3f7a9c2e1b8d4a6f...</span>
+        <span class="sp"></span>
+        <span class="cmd">docker network ls</span>
+        <span class="out info">NETWORK ID &nbsp;&nbsp; NAME &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DRIVER &nbsp;&nbsp; SCOPE</span>
+        <span class="out">3f7a9c2e &nbsp;&nbsp;&nbsp; my-network &nbsp; bridge &nbsp;&nbsp; local</span>
+        <span class="sp"></span>
+        <span class="cmd">docker run -d -p 8082:80 --name my-networked-site --network my-network my-web-app:v1</span>
+        <span class="out ok">Container joined my-network</span>
+      </div>
+    </div>
+    <div class="container-list">
+      <div class="c-item">
+        <div class="c-icon">🔗</div>
+        <div class="c-info">
+          <div class="c-name">my-network</div>
+          <div class="c-detail">bridge driver &nbsp;·&nbsp; 3 containers connected</div>
+        </div>
+        <div class="badge net">ACTIVE</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel full">
+    <div class="ptag">Phase 05 — Image Registry</div>
+    <div class="ptitle">Pushing to DockerHub</div>
+    <p>DockerHub is a public image registry. Once the image is pushed anyone can do docker pull rajul971/my-web-app:v1 and run the exact same application on any cloud provider. This is what makes containers so powerful for cloud deployment.</p>
+    <div class="hub-stats">
+      <div><div class="hs-num">1</div><div class="hs-lbl">Repository</div></div>
+      <div><div class="hs-num">2</div><div class="hs-lbl">Tags</div></div>
+      <div><div class="hs-num">~25</div><div class="hs-lbl">MB Size</div></div>
+    </div>
+    <div class="terminal" style="max-width:680px">
+      <div class="term-header">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <span class="term-name">PowerShell — push to DockerHub</span>
+      </div>
+      <div class="term-body">
+        <span class="cmd">docker login</span>
+        <span class="out ok">Login Succeeded</span>
+        <span class="sp"></span>
+        <span class="cmd">docker tag my-web-app:v1 rajul971/my-web-app:v1</span>
+        <span class="out ok">Tagged successfully</span>
+        <span class="sp"></span>
+        <span class="cmd">docker push rajul971/my-web-app:v1</span>
+        <span class="out info">The push refers to repository [docker.io/rajul971/my-web-app]</span>
+        <span class="out ok">v1: digest: sha256:a9f3c8d2... size: 25.4MB</span>
+      </div>
+    </div>
+    <div class="img-tags">
+      <div class="itag">rajul971/my-web-app:v1</div>
+      <div class="itag">rajul971/my-web-app:latest</div>
+      <div class="itag">nginx:latest (base)</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="footer-left">
+    Module: <span>ACCA7027 — Cloud Engineering Principles and Practice</span><br>
+    Student: <span>Rajul Gupta &nbsp;|&nbsp; 2523934</span><br>
+    University: <span>University of Wales Trinity Saint David</span>
+  </div>
+  <div class="footer-right">
+    <div class="fbadge">Docker 29.2.1</div>
+    <div class="fbadge">NGINX:latest</div>
+    <div class="fbadge">MSc Level 7</div>
+  </div>
+</footer>
+
+<script>
+
+  // boot sequence - show lines one by one
+  var ids    = ['b0','b1','b2','b3','b4','b5','b6','b7','b8','b9'];
+  var times  = [200, 500, 900, 1300, 1700, 2100, 2500, 2900, 3200, 3400];
+
+  for (var i = 0; i < ids.length; i++) {
+    (function(id, delay) {
+      setTimeout(function() {
+        var el = document.getElementById(id);
+        if (el) el.classList.add('show');
+      }, delay);
+    })(ids[i], times[i]);
+  }
+
+  setTimeout(function() {
+    var bs = document.getElementById('bootScreen');
+    bs.classList.add('fadeout');
+    setTimeout(function() { bs.style.display = 'none'; }, 1200);
+  }, 5000);
+
+
+  // matrix rain
+  var canvas = document.getElementById('matrixCanvas');
+  var ctx    = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  var fontSize = 13;
+  var drops    = [];
+  var chars    = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789ABCDEF><{}[]|/\\';
+
+  function resetDrops() {
+    var cols = Math.floor(canvas.width / fontSize);
+    drops = [];
+    for (var i = 0; i < cols; i++) {
+      drops[i] = Math.random() * -50;
+    }
+  }
+  resetDrops();
+  window.addEventListener('resize', resetDrops);
+
+  function drawMatrix() {
+    ctx.fillStyle = 'rgba(3,13,3,0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = fontSize + 'px monospace';
+
+    for (var i = 0; i < drops.length; i++) {
+      var ch = chars[Math.floor(Math.random() * chars.length)];
+      // top of trail is bright white
+      if (Math.random() > 0.95) {
+        ctx.fillStyle = '#ffffff';
+      } else {
+        ctx.fillStyle = '#00ff41';
+      }
+      ctx.fillText(ch, i * fontSize, drops[i] * fontSize);
+
+      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i] += 0.55;
+    }
+  }
+  setInterval(drawMatrix, 48);
+
+
+  // custom cursor
+  var cur     = document.getElementById('cur');
+  var curRing = document.getElementById('cur-ring');
+  var mx = 0, my = 0, rx = 0, ry = 0;
+
+  document.addEventListener('mousemove', function(e) {
+    mx = e.clientX;
+    my = e.clientY;
+    cur.style.left = mx + 'px';
+    cur.style.top  = my + 'px';
+  });
+
+  function animateRing() {
+    rx += (mx - rx) * 0.12;
+    ry += (my - ry) * 0.12;
+    curRing.style.left = rx + 'px';
+    curRing.style.top  = ry + 'px';
+    requestAnimationFrame(animateRing);
+  }
+  animateRing();
+
+
+  // live clock
+  function tick() {
+    var d = new Date();
+    var h = String(d.getHours()).padStart(2,'0');
+    var m = String(d.getMinutes()).padStart(2,'0');
+    var s = String(d.getSeconds()).padStart(2,'0');
+    document.getElementById('clockDisplay').textContent = h + ':' + m + ':' + s;
+  }
+  tick();
+  setInterval(tick, 1000);
+
+
+  // counter animation
+  function countUp(id, target, speed) {
+    var el  = document.getElementById(id);
+    var n   = 0;
+    var t   = setInterval(function() {
+      n++;
+      el.textContent = n;
+      if (n >= target) clearInterval(t);
+    }, speed);
+  }
+
+  setTimeout(function() {
+    countUp('cnt1', 3, 300);
+    countUp('cnt2', 4, 230);
+    countUp('cnt3', 2, 450);
+  }, 5300);
+
+
+  // get real IP of the machine
+  fetch('https://api.ipify.org?format=json')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('hostIP').textContent = d.ip;
+    })
+    .catch(function() {
+      document.getElementById('hostIP').textContent = '192.168.x.x (local)';
+    });
+
+</script>
+</body>
+</html>
